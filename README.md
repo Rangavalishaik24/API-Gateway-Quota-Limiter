@@ -1,6 +1,6 @@
 # API Gateway with Dynamic Quota Limiter & Document Search
 
-**Academic title:** Token-Tiered Ingress Rate Limiting Gateway and Lexical Document Retrieval Pipeline
+**title:** Token-Tiered Ingress Rate Limiting Gateway and Lexical Document Retrieval Pipeline
 **Stack:** MongoDB, Express.js 4, Angular 18 (standalone), Node.js. Runs entirely on localhost: no API keys, no cloud services, no Redis.
 
 ## Project structure
