@@ -1,0 +1,303 @@
+/* ==========================================================================
+   Gateway Console – global styles
+   Palette: obsidian #0B0F19 / #111827, emerald #10B981, amber #F59E0B,
+            crimson #EF4444, violet-indigo #6366F1 / #4F46E5
+   Plain CSS (Tailwind play CDN handles utility classes at runtime).
+   Selectors use two classes where Tailwind preflight could otherwise win.
+   ========================================================================== */
+
+:root {
+  --obsidian-950: #0b0f19;
+  --obsidian-900: #111827;
+  --obsidian-700: #273046;
+  --emerald: #10b981;
+  --amber: #f59e0b;
+  --crimson: #ef4444;
+  --indigo: #6366f1;
+  --indigo-deep: #4f46e5;
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--obsidian-950);
+  color: #e2e8f0;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+::selection {
+  background: rgba(99, 102, 241, 0.45);
+  color: #fff;
+}
+
+/* ---------- Backdrop ---------- */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(99, 102, 241, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.07) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 75%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 75%);
+}
+
+/* ---------- Surfaces ---------- */
+.panel {
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.94), rgba(17, 24, 39, 0.82));
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  border-radius: 1rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 24px 48px -28px rgba(0, 0, 0, 0.9);
+}
+
+.panel-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  letter-spacing: -0.01em;
+}
+
+.panel-sub {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+/* ---------- Form controls ---------- */
+.field {
+  width: 100%;
+  background: var(--obsidian-950);
+  border: 1px solid var(--obsidian-700);
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  color: #f1f5f9;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.field::placeholder {
+  color: #64748b;
+}
+.field:focus {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+select.field {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, #94a3b8 50%), linear-gradient(135deg, #94a3b8 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 2.2rem;
+}
+textarea.field {
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #cbd5e1;
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  padding: 0.7rem 1.1rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease, opacity 0.2s ease, border-color 0.2s ease;
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn:focus-visible,
+.focus-ring:focus-visible {
+  outline: 2px solid #a5b4fc;
+  outline-offset: 2px;
+}
+
+.btn.btn-emerald {
+  background-color: var(--emerald);
+  color: #022c22;
+  box-shadow: 0 10px 26px -12px rgba(16, 185, 129, 0.85);
+}
+.btn.btn-emerald:hover:not(:disabled) {
+  background-color: #34d399;
+}
+
+.btn.btn-crimson {
+  background-color: rgba(239, 68, 68, 0.14);
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.55);
+}
+.btn.btn-crimson:hover:not(:disabled) {
+  background-color: rgba(239, 68, 68, 0.24);
+}
+
+.btn.btn-indigo {
+  background-color: rgba(99, 102, 241, 0.12);
+  color: #c7d2fe;
+  border-color: rgba(99, 102, 241, 0.45);
+}
+.btn.btn-indigo:hover:not(:disabled) {
+  background-color: rgba(99, 102, 241, 0.22);
+}
+
+.btn.btn-quiet {
+  background-color: transparent;
+  color: #94a3b8;
+  padding: 0.45rem 0.7rem;
+  font-weight: 500;
+}
+.btn.btn-quiet:hover:not(:disabled) {
+  color: #e2e8f0;
+  background-color: rgba(148, 163, 184, 0.08);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.75rem;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  background-color: rgba(99, 102, 241, 0.08);
+  color: #c7d2fe;
+}
+button.chip {
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+button.chip:hover {
+  background-color: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.6);
+}
+
+/* Highlighted lexical matches */
+mark.hit {
+  background-color: rgba(16, 185, 129, 0.16);
+  color: #6ee7b7;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.75);
+  border-radius: 0.2rem;
+  padding: 0 0.12rem;
+}
+
+/* ---------- Motion ---------- */
+
+/* Tab switch: fade + slide */
+@keyframes tab-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.tab-enter {
+  animation: tab-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Result cards and log rows arriving */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise-in {
+  animation: rise-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* 429: shake */
+@keyframes shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-7px); }
+  40%, 60% { transform: translateX(7px); }
+}
+.shake {
+  animation: shake 0.55s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* 429: flash red */
+@keyframes flash-red {
+  0%   { box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.95), 0 0 48px rgba(239, 68, 68, 0.55); background-color: rgba(239, 68, 68, 0.22); }
+  100% { box-shadow: 0 0 0 1px rgba(239, 68, 68, 0), 0 0 0 rgba(239, 68, 68, 0); }
+}
+.flash-red {
+  animation: flash-red 1.1s ease-out both;
+}
+
+/* Combined (shake + flash) for surfaces that get both */
+.shake.flash-red {
+  animation: shake 0.55s cubic-bezier(0.36, 0.07, 0.19, 0.97) both, flash-red 1.1s ease-out both;
+}
+
+/* Persistent crimson glow while throttled */
+@keyframes crimson-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.55), 0 0 22px -6px rgba(239, 68, 68, 0.45); }
+  50%      { box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.9), 0 0 36px -4px rgba(239, 68, 68, 0.7); }
+}
+.crimson-breathe {
+  animation: crimson-breathe 1.6s ease-in-out infinite;
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  from { background-position: -480px 0; }
+  to   { background-position: 480px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #1a2234 0%, #273046 40%, #1a2234 80%);
+  background-size: 960px 100%;
+  animation: shimmer 1.3s linear infinite;
+  border-radius: 0.5rem;
+}
+
+/* Gauge arcs and bars scale smoothly as quota is consumed */
+.gauge-arc {
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), stroke 0.4s ease;
+}
+.window-arc {
+  transition: stroke-dashoffset 0.25s linear;
+}
+.bar-fill {
+  transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.4s ease;
+}
+.timeline-mark {
+  transition: left 0.25s linear, opacity 0.3s ease;
+}
+.retry-bar {
+  transition: width 0.25s linear;
+}
+
+/* Scrollbars */
+.scroll-thin::-webkit-scrollbar { height: 8px; width: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: #273046; border-radius: 8px; }
+.scroll-thin::-webkit-scrollbar-track { background: transparent; }
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

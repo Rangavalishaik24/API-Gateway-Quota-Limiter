@@ -1,0 +1,689 @@
+<div class="relative min-h-screen overflow-x-hidden bg-obsidian-950 text-slate-200">
+  <!-- Backdrop -->
+  <div class="pointer-events-none fixed inset-0 bg-grid"></div>
+  <div class="pointer-events-none fixed -top-48 left-1/2 h-[28rem] w-[56rem] -translate-x-1/2 rounded-full bg-indigo-600/10 blur-3xl"></div>
+
+  <div class="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+
+    <!-- ================================================================ HEADER -->
+    <header class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      <div class="flex items-center gap-4">
+        <div class="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-indigo-500/40 bg-gradient-to-br from-indigo-600/30 to-emerald-500/10">
+          <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z" />
+            <path d="M8.5 12.5l2.3 2.3 4.7-5" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">API Gateway with Dynamic Quota Limiter</h1>
+          <p class="text-sm text-slate-400">Token-tiered ingress rate limiting and lexical document retrieval</p>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <!-- Pulsating gateway status pill -->
+        <div class="flex items-center gap-2.5 self-start rounded-full border px-3.5 py-1.5 text-sm font-medium sm:self-auto"
+             [ngClass]="statusPillClass" role="status" aria-live="polite">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" [ngClass]="statusDotClass"></span>
+            <span class="relative inline-flex h-2.5 w-2.5 rounded-full" [ngClass]="statusDotClass"></span>
+          </span>
+          {{ statusLabel }}
+        </div>
+
+        <!-- API key switcher -->
+        <div class="flex rounded-xl border border-indigo-500/30 bg-obsidian-900/80 p-1" role="radiogroup" aria-label="API key">
+          @for (k of keys; track k.key) {
+            <button type="button" role="radio" [attr.aria-checked]="activeKey === k.key"
+                    (click)="selectKey(k.key)"
+                    class="focus-ring flex flex-col items-start rounded-lg px-3 py-1.5 text-left transition-all duration-300"
+                    [ngClass]="activeKey === k.key
+                      ? (k.tier === 'FREE' ? 'bg-amber-500/15 text-amber-200 shadow-[inset_0_0_0_1px_rgba(245,158,11,.5)]' : 'bg-emerald-500/15 text-emerald-200 shadow-[inset_0_0_0_1px_rgba(16,185,129,.5)]')
+                      : 'text-slate-400 hover:text-slate-200'">
+              <span class="text-sm font-semibold">{{ k.label }}</span>
+              <span class="font-mono text-[11px] opacity-80">Limit: {{ k.limit }} req/min</span>
+            </button>
+          }
+        </div>
+      </div>
+    </header>
+
+    <!-- Global 429 strip, visible on every tab while Retry-After is counting down -->
+    @if (retrySeconds > 0 && activeTab !== 'radar') {
+      <div class="mt-5 flex flex-col gap-3 rounded-xl border border-red-500/60 bg-red-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+           [class.flash-red]="flashing" role="alert">
+        <p class="text-sm text-red-200">
+          <span class="font-semibold text-red-300">HTTP 429</span> on {{ last429Label }}.
+          Retry in <span class="font-mono font-bold text-white">{{ retrySeconds }}s</span>.
+        </p>
+        <button type="button" class="btn btn-crimson self-start py-1.5 sm:self-auto" (click)="go('radar')">Open quota radar</button>
+      </div>
+    }
+
+    <!-- ================================================================ TABS -->
+    <nav class="mt-6 grid grid-cols-1 gap-2 rounded-2xl border border-slate-800 bg-obsidian-900/70 p-1.5 backdrop-blur md:grid-cols-3" aria-label="Sections">
+      @for (t of tabs; track t.id) {
+        <button type="button" (click)="go(t.id)" [attr.aria-current]="activeTab === t.id ? 'page' : null"
+                class="focus-ring relative rounded-xl border px-4 py-3 text-left transition-all duration-300"
+                [ngClass]="activeTab === t.id ? 'border-indigo-500/60 bg-indigo-600/15 shadow-glow' : 'border-transparent hover:bg-slate-800/40'">
+          <span class="block text-sm font-semibold" [ngClass]="activeTab === t.id ? 'text-white' : 'text-slate-300'">{{ t.label }}</span>
+          <span class="mt-0.5 block text-xs text-slate-500">{{ t.hint }}</span>
+          @if (activeTab === t.id) {
+            <span class="absolute inset-x-4 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-indigo-500 via-indigo-400 to-emerald-400"></span>
+          }
+        </button>
+      }
+    </nav>
+
+    <!-- ================================================================ TAB 1: CONSOLE -->
+    @if (activeTab === 'console') {
+      <section class="tab-enter mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div class="min-w-0 space-y-6 lg:col-span-2">
+
+          <!-- Search box -->
+          <div class="panel p-5" [class.shake]="shaking" [class.flash-red]="flashing">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 class="panel-title">Search the knowledge base</h2>
+              <code class="font-mono text-xs text-slate-500">POST /api/search &nbsp; x-api-key: {{ maskKey(activeKey) }}</code>
+            </div>
+            <div class="mt-4 flex flex-col gap-3 sm:flex-row">
+              <label class="relative flex-1">
+                <span class="sr-only">Search query</span>
+                <svg class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" />
+                </svg>
+                <input class="field pl-10" type="text" name="query" maxlength="200" autocomplete="off"
+                       placeholder="Try: refresh token rotation"
+                       [(ngModel)]="query" (keyup.enter)="runSearch()" />
+              </label>
+              <button type="button" class="btn btn-emerald" (click)="runSearch()" [disabled]="searching">
+                @if (searching) {
+                  <span class="h-4 w-4 animate-spin rounded-full border-2 border-emerald-950/30 border-t-emerald-950"></span>
+                  Searching
+                } @else {
+                  Run search
+                }
+              </button>
+            </div>
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              <span class="text-xs text-slate-500">Examples</span>
+              @for (s of suggestions; track s) {
+                <button type="button" class="chip focus-ring" (click)="useSuggestion(s)" [disabled]="searching">{{ s }}</button>
+              }
+            </div>
+          </div>
+
+          <!-- Execution breakdown -->
+          <div class="panel p-5">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 class="panel-title">Execution breakdown</h2>
+              @if (lastRoundTripMs !== null) {
+                <span class="text-xs text-slate-400">Round trip <span class="font-mono text-slate-200">{{ lastRoundTripMs | number: '1.1-1' }} ms</span></span>
+              }
+            </div>
+            <ol class="mt-4 grid gap-3 sm:grid-cols-3">
+              @for (step of steps; track step.id; let i = $index; let last = $last) {
+                <li class="relative rounded-xl border p-4 transition-all duration-300" [ngClass]="stepClass(step.state)">
+                  @if (!last) {
+                    <span class="absolute -right-3 top-1/2 hidden h-0.5 w-3 sm:block" [ngClass]="connectorClass(step.state)"></span>
+                  }
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-slate-400">Step {{ i + 1 }}</span>
+                    @switch (step.state) {
+                      @case ('active') {
+                        <span class="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400/30 border-t-indigo-400" aria-label="Running"></span>
+                      }
+                      @case ('done') {
+                        <svg viewBox="0 0 24 24" class="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.5" aria-label="Passed"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                      }
+                      @case ('failed') {
+                        <svg viewBox="0 0 24 24" class="h-4 w-4 text-red-400" fill="none" stroke="currentColor" stroke-width="2.5" aria-label="Failed"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                      }
+                      @default {
+                        <span class="h-2 w-2 rounded-full bg-slate-600"></span>
+                      }
+                    }
+                  </div>
+                  <p class="mt-2 text-sm font-semibold text-white">{{ step.label }}</p>
+                  <p class="text-xs text-slate-400">{{ step.detail }}</p>
+                  <p class="mt-3 font-mono text-sm"
+                     [ngClass]="step.state === 'failed' ? 'text-red-300' : step.state === 'done' ? 'text-emerald-300' : 'text-slate-500'">
+                    {{ step.ms !== null ? (step.ms | number: '1.3-3') + ' ms' : '–' }}
+                  </p>
+                  <p class="mt-0.5 text-xs text-slate-400">{{ step.note }}</p>
+                </li>
+              }
+            </ol>
+          </div>
+
+          <!-- Results -->
+          <div class="panel p-5">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 class="panel-title">Matching chunks</h2>
+              @if (searchResponse; as res) {
+                <span class="text-xs text-slate-400">
+                  {{ res.results.length }} of {{ res.totalCandidates }} candidates, server time
+                  <span class="font-mono text-emerald-300">{{ res.pipeline.totalMs | number: '1.2-2' }} ms</span>
+                </span>
+              }
+            </div>
+
+            <div class="mt-4 space-y-4">
+              @if (searching) {
+                @for (s of [1, 2, 3]; track s) {
+                  <div class="rounded-xl border border-slate-800 p-4">
+                    <div class="skeleton h-4 w-1/3"></div>
+                    <div class="skeleton mt-3 h-3 w-full"></div>
+                    <div class="skeleton mt-2 h-3 w-11/12"></div>
+                    <div class="skeleton mt-2 h-3 w-2/3"></div>
+                  </div>
+                }
+              } @else {
+              @if (searchError; as err) {
+                <div class="rounded-xl border p-4"
+                     [ngClass]="err.status === 429 || err.status === 0 ? 'border-red-500/60 bg-red-500/10' : 'border-amber-500/50 bg-amber-500/10'"
+                     [class.shake]="shaking && err.status === 429" role="alert">
+                  <p class="font-semibold" [ngClass]="err.status === 429 || err.status === 0 ? 'text-red-300' : 'text-amber-300'">{{ err.title }}</p>
+                  <p class="mt-1 text-sm text-slate-300">{{ err.message }}</p>
+                  @if (err.status === 429) {
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <button type="button" class="btn btn-indigo py-1.5" (click)="go('radar')">See the quota window</button>
+                      <button type="button" class="btn btn-quiet" (click)="resetQuota()" [disabled]="resetting">Reset quota</button>
+                    </div>
+                  }
+                </div>
+              } @else {
+              @if (searchResponse; as res) {
+                @if (res.results.length === 0) {
+                  <div class="rounded-xl border border-dashed border-slate-700 p-6 text-center">
+                    <p class="text-sm text-slate-300">No document contains these terms.</p>
+                    <p class="mt-1 text-xs text-slate-500">Try broader words, or add a document in the Knowledge Base tab.</p>
+                  </div>
+                }
+                @for (r of res.results; track r.id; let i = $index) {
+                  <article class="rise-in rounded-xl border border-slate-800 bg-obsidian-950/60 p-4" [style.animation-delay.ms]="i * 70">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                      <h3 class="text-base font-semibold text-white">
+                        @for (seg of r.titleSegments; track $index) {
+                          @if (seg.hit) {<mark class="hit">{{ seg.text }}</mark>} @else {<span>{{ seg.text }}</span>}
+                        }
+                      </h3>
+                      <span class="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 font-mono text-xs text-emerald-300" title="BM25 relevance score">
+                        {{ r.score | number: '1.3-3' }}
+                      </span>
+                    </div>
+                    <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span class="rounded-md bg-indigo-500/15 px-2 py-0.5 text-[11px] font-medium text-indigo-200">{{ r.docType }}</span>
+                      @for (tag of r.tags; track tag) {
+                        <span class="rounded-md border border-slate-700 px-2 py-0.5 text-[11px] text-slate-400">#{{ tag }}</span>
+                      }
+                      <span class="ml-auto text-xs text-slate-500">Matched {{ r.matchedTerms.join(', ') }} ({{ r.coverage * 100 | number: '1.0-0' }}% of terms)</span>
+                    </div>
+                    <div class="mt-3 space-y-2">
+                      @for (c of r.chunks; track c.index) {
+                        <div class="rounded-lg border-l-2 border-emerald-500/60 bg-obsidian-900/80 px-3 py-2">
+                          <p class="mb-1 font-mono text-[11px] text-slate-500">chunk {{ c.index }}, score {{ c.score | number: '1.3-3' }}</p>
+                          <p class="text-sm leading-relaxed text-slate-300">
+                            @for (seg of c.segments; track $index) {
+                              @if (seg.hit) {<mark class="hit">{{ seg.text }}</mark>} @else {<span>{{ seg.text }}</span>}
+                            }
+                          </p>
+                        </div>
+                      }
+                    </div>
+                  </article>
+                }
+              } @else {
+                <div class="rounded-xl border border-dashed border-slate-700 p-6 text-center">
+                  <p class="text-sm text-slate-300">Run a search to see ranked chunks with highlighted matches.</p>
+                  <p class="mt-1 text-xs text-slate-500">Each search spends one request from the selected key's quota.</p>
+                </div>
+              }
+              }
+              }
+            </div>
+          </div>
+        </div>
+
+        <!-- Right column -->
+        <aside class="min-w-0 space-y-6">
+          <div class="panel p-5" [class.flash-red]="flashing">
+            <div class="flex items-baseline justify-between">
+              <h2 class="panel-title">{{ activeKeyInfo.label }}</h2>
+              <span class="font-mono text-xs text-slate-400">{{ activeLive.windowSeconds }}s window</span>
+            </div>
+            <p class="mt-4 font-mono text-3xl font-bold text-white">
+              {{ activeLive.used }}<span class="text-lg text-slate-500"> / {{ activeLive.limit }}</span>
+            </p>
+            <p class="text-xs text-slate-400">requests used in the last minute</p>
+            <div class="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-obsidian-700" role="progressbar"
+                 [attr.aria-valuenow]="activeLive.used" aria-valuemin="0" [attr.aria-valuemax]="activeLive.limit">
+              <div class="bar-fill h-full rounded-full" [ngClass]="barClass(activeLive)" [style.width.%]="activeLive.ratio * 100"></div>
+            </div>
+            <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div class="rounded-lg bg-obsidian-950/70 p-3">
+                <dt class="text-xs text-slate-500">Remaining</dt>
+                <dd class="font-mono text-lg" [style.color]="quotaColor(activeLive)">{{ activeLive.remaining }}</dd>
+              </div>
+              <div class="rounded-lg bg-obsidian-950/70 p-3">
+                <dt class="text-xs text-slate-500">Next slot frees in</dt>
+                <dd class="font-mono text-lg text-slate-200">{{ activeLive.nextFreeIn }}s</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="panel p-5">
+            <h2 class="panel-title">Query terms</h2>
+            <p class="panel-sub mt-1">Lower-cased, stop-words removed, plural endings stemmed.</p>
+            <div class="mt-3 flex flex-wrap gap-1.5">
+              @if (searchResponse; as res) {
+                @for (t of res.tokens; track t) {
+                  <span class="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 font-mono text-xs text-emerald-200">{{ t }}</span>
+                }
+              } @else {
+                <span class="text-xs text-slate-500">Terms appear after a successful search.</span>
+              }
+            </div>
+          </div>
+
+          <div class="panel p-5">
+            <h2 class="panel-title">Last response headers</h2>
+            @if (lastHeaders; as h) {
+              <dl class="mt-3 space-y-1.5 font-mono text-xs">
+                <div class="flex justify-between"><dt class="text-slate-500">X-RateLimit-Limit</dt><dd class="text-slate-200">{{ h.limit }}</dd></div>
+                <div class="flex justify-between"><dt class="text-slate-500">X-RateLimit-Remaining</dt><dd [ngClass]="h.remaining === 0 ? 'text-red-300' : 'text-emerald-300'">{{ h.remaining }}</dd></div>
+                <div class="flex justify-between"><dt class="text-slate-500">X-RateLimit-Reset</dt><dd class="text-slate-200">{{ h.reset }}s</dd></div>
+              </dl>
+            } @else {
+              <p class="mt-2 text-xs text-slate-500">Headers from the gateway show here after your first request.</p>
+            }
+          </div>
+        </aside>
+      </section>
+    }
+
+    <!-- ================================================================ TAB 2: RADAR -->
+    @if (activeTab === 'radar') {
+      <section class="tab-enter mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
+
+        <!-- Gauge -->
+        <div class="min-w-0 space-y-6 lg:col-span-2">
+          <div class="panel p-6" [class.shake]="shaking" [class.flash-red]="flashing"
+               [class.crimson-breathe]="activeLive.synced && activeLive.remaining === 0">
+            <div class="flex items-baseline justify-between">
+              <h2 class="panel-title">{{ activeKeyInfo.label }}</h2>
+              <span class="text-xs" [ngClass]="activeKeyInfo.tier === 'FREE' ? 'text-amber-300' : 'text-emerald-300'">
+                {{ activeKeyInfo.tier === 'FREE' ? 'Free tier' : 'Enterprise Pro' }}
+              </span>
+            </div>
+
+            <div class="relative mx-auto mt-5 aspect-square w-full max-w-[17rem]">
+              <svg viewBox="0 0 220 220" class="h-full w-full -rotate-90" aria-hidden="true">
+                <!-- quota track + arc -->
+                <circle cx="110" cy="110" r="88" fill="none" stroke="#1F2937" stroke-width="14" />
+                <circle class="gauge-arc" cx="110" cy="110" r="88" fill="none" stroke-width="14"
+                        [attr.stroke]="quotaColor(activeLive)"
+                        [attr.stroke-linecap]="activeLive.used > 0 ? 'round' : 'butt'"
+                        [attr.stroke-dasharray]="gaugeCircumference"
+                        [attr.stroke-dashoffset]="gaugeOffset(activeLive)" />
+                <!-- sliding-window countdown ring -->
+                <circle cx="110" cy="110" r="70" fill="none" stroke="#1A2234" stroke-width="5" />
+                <circle class="window-arc" cx="110" cy="110" r="70" fill="none" stroke="#6366F1" stroke-width="5" stroke-linecap="round"
+                        [attr.stroke-dasharray]="windowCircumference"
+                        [attr.stroke-dashoffset]="windowOffset(activeLive)" />
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span class="text-xs text-slate-400">Requests</span>
+                <span class="font-mono text-4xl font-bold text-white">
+                  {{ activeLive.used }}<span class="text-2xl text-slate-500"> / {{ activeLive.limit }}</span>
+                </span>
+                <span class="mt-1 text-xs font-medium" [style.color]="quotaColor(activeLive)">
+                  {{ activeLive.remaining === 0 ? 'Quota exhausted' : activeLive.remaining + ' remaining' }}
+                </span>
+              </div>
+            </div>
+
+            <dl class="mt-5 grid grid-cols-3 gap-2 text-center">
+              <div class="rounded-lg bg-obsidian-950/70 p-2.5">
+                <dt class="text-[11px] text-slate-500">Next slot</dt>
+                <dd class="font-mono text-lg text-indigo-300">{{ activeLive.nextFreeIn }}s</dd>
+              </div>
+              <div class="rounded-lg bg-obsidian-950/70 p-2.5">
+                <dt class="text-[11px] text-slate-500">Window clears</dt>
+                <dd class="font-mono text-lg text-slate-200">{{ activeLive.fullResetIn }}s</dd>
+              </div>
+              <div class="rounded-lg bg-obsidian-950/70 p-2.5">
+                <dt class="text-[11px] text-slate-500">Window</dt>
+                <dd class="font-mono text-lg text-slate-200">{{ activeLive.windowSeconds }}s</dd>
+              </div>
+            </dl>
+            <p class="mt-2 text-center text-[11px] text-slate-500">Inner violet ring counts down until the oldest request leaves the window.</p>
+
+            <div class="mt-5 space-y-2">
+              <button type="button" class="btn btn-crimson w-full whitespace-normal" (click)="simulateSpike()" [disabled]="spikeRunning">
+                @if (spikeRunning) {
+                  <span class="h-4 w-4 animate-spin rounded-full border-2 border-red-300/30 border-t-red-300"></span>
+                  Firing request {{ spikeLog.length + 1 }} of {{ spikeCount }}
+                } @else {
+                  Simulate Traffic Spike ({{ spikeCount }} Rapid Requests)
+                }
+              </button>
+              <div class="grid grid-cols-2 gap-2">
+                <button type="button" class="btn btn-emerald" (click)="resetQuota()" [disabled]="resetting || spikeRunning">
+                  @if (resetting) {
+                    <span class="h-4 w-4 animate-spin rounded-full border-2 border-emerald-950/30 border-t-emerald-950"></span>
+                  }
+                  Reset Quota
+                </button>
+                <button type="button" class="btn btn-indigo" (click)="resetQuota(true)" [disabled]="resetting || spikeRunning">
+                  Reset every key
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tier comparison -->
+          <div class="panel p-5">
+            <h2 class="panel-title">All keys</h2>
+            <div class="mt-4 space-y-4">
+              @for (k of keys; track k.key) {
+                <button type="button" class="focus-ring block w-full rounded-lg text-left" (click)="selectKey(k.key)">
+                  <div class="flex items-baseline justify-between text-sm">
+                    <span [ngClass]="activeKey === k.key ? 'font-semibold text-white' : 'text-slate-300'">{{ k.label }}</span>
+                    <span class="font-mono text-xs text-slate-400">{{ liveFor(k).used }} / {{ liveFor(k).limit }}</span>
+                  </div>
+                  <div class="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-obsidian-700">
+                    <div class="bar-fill h-full rounded-full" [ngClass]="barClass(liveFor(k))" [style.width.%]="liveFor(k).ratio * 100"></div>
+                  </div>
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+
+        <!-- Right side: banner, timeline, log -->
+        <div class="min-w-0 space-y-6 lg:col-span-3">
+          @if (radarRetry > 0) {
+            <div class="panel crimson-breathe overflow-hidden border-red-500/70 bg-red-950/40 p-5" [class.flash-red]="flashing" [class.shake]="shaking" role="alert">
+              <div class="flex items-start gap-4">
+                <div class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-red-500/20">
+                  <svg viewBox="0 0 24 24" class="h-6 w-6 text-red-400" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M12 9v4M12 17h.01M10.3 3.9L2.4 17.5A2 2 0 004.1 20.5h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" />
+                  </svg>
+                </div>
+                <div class="flex-1">
+                  <p class="text-lg font-bold text-red-300">HTTP 429 - Rate Limit Exceeded</p>
+                  <p class="mt-0.5 text-sm text-red-100/80">
+                    {{ activeKeyInfo.label }} has spent its full quota in the current window. The gateway rejects further calls until the oldest request ages out.
+                  </p>
+                </div>
+                <div class="text-right">
+                  <p class="text-[11px] text-red-200/70">Retry-After</p>
+                  <p class="font-mono text-3xl font-bold text-white">{{ radarRetry }}s</p>
+                </div>
+              </div>
+              <div class="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-red-950">
+                <div class="retry-bar h-full rounded-full bg-red-500" [style.width.%]="radarRetryProgress"></div>
+              </div>
+            </div>
+          } @else {
+            <div class="panel flex items-center gap-3 border-emerald-500/30 p-4">
+              <span class="h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
+              <p class="text-sm text-slate-300">No active throttling. Requests on {{ activeKeyInfo.label }} are being admitted.</p>
+            </div>
+          }
+
+          <!-- Sliding-window timeline -->
+          <div class="panel p-5">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 class="panel-title">Sliding window, last {{ activeLive.windowSeconds }} seconds</h2>
+              <span class="text-xs text-slate-400">Each dot is a request; it drifts left and drops out at 60s.</span>
+            </div>
+
+            <div class="mt-4 space-y-2">
+              <div class="flex items-center gap-3">
+                <span class="w-20 shrink-0 text-xs text-emerald-300">Admitted</span>
+                <div class="relative h-10 flex-1 overflow-hidden rounded-lg border border-slate-800 bg-obsidian-950">
+                  @for (tick of timelineTicks; track tick) {
+                    <span class="absolute inset-y-0 w-px bg-slate-800" [style.left.%]="tick * (100 / 6)"></span>
+                  }
+                  @for (m of activeLive.accepted; track m.t) {
+                    <span class="timeline-mark absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,.8)]"
+                          [style.left.%]="m.pos"></span>
+                  }
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="w-20 shrink-0 text-xs text-red-300">Rejected</span>
+                <div class="relative h-10 flex-1 overflow-hidden rounded-lg border border-slate-800 bg-obsidian-950">
+                  @for (tick of timelineTicks; track tick) {
+                    <span class="absolute inset-y-0 w-px bg-slate-800" [style.left.%]="tick * (100 / 6)"></span>
+                  }
+                  @for (m of activeLive.rejected; track m.t) {
+                    <span class="timeline-mark absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-red-500 shadow-[0_0_12px_rgba(239,68,68,.8)]"
+                          [style.left.%]="m.pos"></span>
+                  }
+                </div>
+              </div>
+              <div class="flex gap-3">
+                <span class="w-20 shrink-0"></span>
+                <div class="flex flex-1 justify-between font-mono text-[10px] text-slate-500">
+                  <span>−60s</span><span>−50s</span><span>−40s</span><span>−30s</span><span>−20s</span><span>−10s</span><span>now</span>
+                </div>
+              </div>
+            </div>
+            <p class="mt-3 text-xs text-slate-500">
+              Only admitted requests count toward the limit. Rejected calls are shown for visibility but never enter the log.
+            </p>
+          </div>
+
+          <!-- Spike log -->
+          <div class="panel p-5">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 class="panel-title">Traffic spike log</h2>
+              @if (spikeLog.length) {
+                <span class="text-xs">
+                  <span class="text-emerald-300">{{ spikeOk }} admitted</span>
+                  <span class="text-slate-600"> / </span>
+                  <span class="text-red-300">{{ spikeLimited }} rejected</span>
+                </span>
+              }
+            </div>
+            <div class="mt-3 space-y-1.5">
+              @for (e of spikeLog; track e.n) {
+                <div class="rise-in grid grid-cols-12 items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+                     [ngClass]="e.status === 200 ? 'border-emerald-500/25 bg-emerald-500/[0.05]' : e.status === 429 ? 'border-red-500/40 bg-red-500/10' : 'border-amber-500/40 bg-amber-500/10'">
+                  <span class="col-span-1 font-mono text-xs text-slate-500">#{{ e.n }}</span>
+                  <span class="col-span-2">
+                    <span class="rounded px-1.5 py-0.5 font-mono text-xs font-bold"
+                          [ngClass]="e.status === 200 ? 'bg-emerald-500/20 text-emerald-300' : e.status === 429 ? 'bg-red-500/25 text-red-300' : 'bg-amber-500/20 text-amber-300'">
+                      {{ e.status === 0 ? 'ERR' : e.status }}
+                    </span>
+                  </span>
+                  <span class="col-span-7 truncate text-slate-300" [title]="e.message">{{ e.message }}</span>
+                  <span class="col-span-2 text-right font-mono text-xs text-slate-400">{{ e.latencyMs | number: '1.0-1' }} ms</span>
+                </div>
+              } @empty {
+                <div class="rounded-xl border border-dashed border-slate-700 p-6 text-center">
+                  <p class="text-sm text-slate-300">Fire a spike to send {{ spikeCount }} back-to-back searches.</p>
+                  <p class="mt-1 text-xs text-slate-500">
+                    The Free key admits {{ keys[0].limit }} and rejects the rest with 429. The Enterprise key absorbs all {{ spikeCount }}.
+                  </p>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      </section>
+    }
+
+    <!-- ================================================================ TAB 3: VAULT -->
+    @if (activeTab === 'vault') {
+      <section class="tab-enter mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+
+        <!-- Add document -->
+        <div class="panel h-fit min-w-0 p-5">
+          <h2 class="panel-title">Add a document</h2>
+          <p class="panel-sub mt-1">The server splits it into ~45-word chunks and indexes its terms.</p>
+          <div class="mt-4 space-y-4">
+            <div>
+              <label class="field-label" for="doc-title">Title</label>
+              <input id="doc-title" class="field" type="text" maxlength="160" placeholder="API Key Rotation Runbook"
+                     [(ngModel)]="newDoc.title" name="title" />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="field-label" for="doc-type">Type</label>
+                <select id="doc-type" class="field" [(ngModel)]="newDoc.docType" name="docType">
+                  @for (t of docTypes; track t) {
+                    <option [value]="t">{{ t }}</option>
+                  }
+                </select>
+              </div>
+              <div>
+                <label class="field-label" for="doc-tags">Tags</label>
+                <input id="doc-tags" class="field" type="text" placeholder="keys, rotation"
+                       [(ngModel)]="newDoc.tags" name="tags" />
+              </div>
+            </div>
+            <div>
+              <div class="flex items-baseline justify-between">
+                <label class="field-label" for="doc-content">Content</label>
+                <span class="font-mono text-[11px] text-slate-500">{{ newDocWordCount }} words</span>
+              </div>
+              <textarea id="doc-content" class="field" rows="8" maxlength="20000"
+                        placeholder="Write or paste the technical text to index…"
+                        [(ngModel)]="newDoc.content" name="content"></textarea>
+            </div>
+            @if (formError) {
+              <p class="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" role="alert">{{ formError }}</p>
+            }
+            <button type="button" class="btn btn-emerald w-full" (click)="addDocument()" [disabled]="savingDoc">
+              @if (savingDoc) {
+                <span class="h-4 w-4 animate-spin rounded-full border-2 border-emerald-950/30 border-t-emerald-950"></span>
+                Saving
+              } @else {
+                Save to MongoDB
+              }
+            </button>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="min-w-0 space-y-6 lg:col-span-2">
+          <dl class="grid grid-cols-3 gap-3">
+            <div class="panel p-4">
+              <dt class="text-xs text-slate-500">Documents</dt>
+              <dd class="font-mono text-2xl font-bold text-white">{{ documents.length }}</dd>
+            </div>
+            <div class="panel p-4">
+              <dt class="text-xs text-slate-500">Chunks</dt>
+              <dd class="font-mono text-2xl font-bold text-indigo-300">{{ totalChunks }}</dd>
+            </div>
+            <div class="panel p-4">
+              <dt class="text-xs text-slate-500">Words</dt>
+              <dd class="font-mono text-2xl font-bold text-emerald-300">{{ totalWords | number }}</dd>
+            </div>
+          </dl>
+
+          <div class="panel p-5">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 class="panel-title">Stored documents</h2>
+              <div class="flex gap-2">
+                <input class="field py-2 text-sm sm:w-56" type="search" placeholder="Filter documents"
+                       [(ngModel)]="docFilter" name="docFilter" aria-label="Filter documents" />
+                <button type="button" class="btn btn-indigo py-2" (click)="loadDocuments()" [disabled]="docsLoading" aria-label="Reload documents">
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" [class.animate-spin]="docsLoading" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M20 11a8 8 0 10-2.3 5.7M20 5v6h-6" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            @if (docsError) {
+              <p class="mt-4 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-200" role="alert">{{ docsError }}</p>
+            }
+
+            <div class="scroll-thin mt-4 overflow-x-auto">
+              <table class="w-full min-w-[640px] text-left text-sm">
+                <thead>
+                  <tr class="border-b border-slate-800 text-xs text-slate-500">
+                    <th class="pb-2 pr-3 font-medium">Title</th>
+                    <th class="pb-2 pr-3 font-medium">Tags</th>
+                    <th class="pb-2 pr-3 text-right font-medium">Words</th>
+                    <th class="pb-2 pr-3 text-right font-medium">Chunks</th>
+                    <th class="pb-2 pr-3 font-medium">Created</th>
+                    <th class="pb-2 font-medium"><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @if (docsLoading && !documents.length) {
+                    @for (s of [1, 2, 3, 4]; track s) {
+                      <tr class="border-b border-slate-800/60">
+                        <td class="py-3 pr-3"><div class="skeleton h-4 w-48"></div></td>
+                        <td class="py-3 pr-3"><div class="skeleton h-4 w-24"></div></td>
+                        <td class="py-3 pr-3"><div class="skeleton ml-auto h-4 w-10"></div></td>
+                        <td class="py-3 pr-3"><div class="skeleton ml-auto h-4 w-6"></div></td>
+                        <td class="py-3 pr-3"><div class="skeleton h-4 w-28"></div></td>
+                        <td class="py-3"></td>
+                      </tr>
+                    }
+                  }
+                  @for (d of filteredDocs; track d.id) {
+                    <tr class="rise-in border-b border-slate-800/60 align-top transition-colors hover:bg-indigo-500/[0.04]">
+                      <td class="py-3 pr-3">
+                        <p class="font-medium text-white">{{ d.title }}</p>
+                        <p class="mt-0.5 line-clamp-2 max-w-sm text-xs text-slate-500">{{ d.preview }}</p>
+                        <span class="mt-1 inline-block rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] font-medium text-indigo-200">{{ d.docType }}</span>
+                      </td>
+                      <td class="py-3 pr-3">
+                        <div class="flex max-w-[12rem] flex-wrap gap-1">
+                          @for (tag of d.tags; track tag) {
+                            <span class="rounded border border-slate-700 px-1.5 py-0.5 text-[11px] text-slate-400">#{{ tag }}</span>
+                          } @empty {
+                            <span class="text-xs text-slate-600">none</span>
+                          }
+                        </div>
+                      </td>
+                      <td class="py-3 pr-3 text-right font-mono text-slate-200">{{ d.wordCount }}</td>
+                      <td class="py-3 pr-3 text-right font-mono text-indigo-300">{{ d.chunkCount }}</td>
+                      <td class="py-3 pr-3 font-mono text-xs text-slate-400">{{ d.createdAt | date: 'MMM d, y, HH:mm:ss' }}</td>
+                      <td class="py-3 text-right">
+                        <button type="button" class="btn btn-quiet text-xs hover:!text-red-300" (click)="deleteDocument(d)" [disabled]="deletingId === d.id">
+                          {{ deletingId === d.id ? 'Deleting' : 'Delete' }}
+                        </button>
+                      </td>
+                    </tr>
+                  } @empty {
+                    @if (!docsLoading) {
+                      <tr>
+                        <td colspan="6" class="py-8 text-center text-sm text-slate-400">
+                          {{ docFilter ? 'No documents match this filter.' : 'The knowledge base is empty. Add the first document on the left.' }}
+                        </td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    }
+
+    <!-- ================================================================ FOOTER -->
+    <footer class="mt-10 flex flex-col gap-1 border-t border-slate-800 pt-4 text-xs text-slate-500 sm:flex-row sm:justify-between">
+      <span>Backend {{ apiBase }}, MongoDB database api_gateway_demo</span>
+      <span>Synced every 2s@if (lastSync) {<span>, last at </span><span class="font-mono text-slate-400">{{ lastSync | date: 'HH:mm:ss' }}</span>}</span>
+    </footer>
+  </div>
+
+  <!-- Toast -->
+  @if (toast; as t) {
+    <div class="rise-in fixed bottom-5 right-5 z-50 max-w-sm rounded-xl border px-4 py-3 text-sm shadow-2xl"
+         [ngClass]="t.kind === 'ok' ? 'border-emerald-500/50 bg-obsidian-900 text-emerald-200' : 'border-red-500/60 bg-obsidian-900 text-red-200'"
+         role="status" aria-live="polite">
+      {{ t.text }}
+    </div>
+  }
+</div>
